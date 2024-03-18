@@ -379,3 +379,19 @@ EMPTY STAR
 </svg>
 
 */
+
+/* BREAK POINTS*/
+/* @media screen and (min-width: 1200px) {
+}
+
+@media (max-width: 1200px) {
+} */
+
+@media only screen and (max-width: 972px) {
+  .logo h1 {
+    display: none;
+  }
+  .search {
+    display: flex;
+  }
+}

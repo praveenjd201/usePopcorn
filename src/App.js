@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import StarRatings from "./StarRating";
+import { useLocalStorageState } from "./useLocalStorageStage";
 
 const results = [
   {
@@ -76,12 +77,19 @@ const apiKey = "5e642bdc486454fbe0754536e578099d";
 
 export default function App() {
   const [movies, setMovies] = useState([]);
-  const [watched, setWatched] = useState([]);
   const [isLoading, setisLoading] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectId] = useState(null);
   const query1 = "iron man";
+
+  // const [watched, setWatched] = useState([]);
+  const [watched, setWatched] = useLocalStorageState([], "watched");
+  // the below code is written on custom hook because i commented
+  // const [watched, setWatched] = useState(function () {
+  //   return JSON.parse(localStorage.getItem("watched"));
+  // });
+
   // console.log(query);
 
   // Get movies from API and store in state
@@ -96,19 +104,27 @@ export default function App() {
 
   function handleAddWatchedMovie(movie) {
     setWatched((watched) => [...watched, movie]);
+    // localStorage.setItem("watched", JSON.stringify([...watched, movie]));
   }
 
   function handleDeleteWatched(id) {
     setWatched((watched) => watched.filter((movie) => movie.id !== id));
   }
+  // the below code is written on custom hook because i commented
+  // useEffect(() => {
+  //   localStorage.setItem("watched", JSON.stringify(watched));
+  // }, [watched]);
+
   useEffect(() => {
     // eslint-disable-next-line no-unused-expressions
+    const controller = new AbortController();
     async function fetchMovies() {
       try {
         setisLoading(true);
         setError("");
         const res = await fetch(
-          `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${query}`
+          `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${query}`,
+          { signal: controller.signal }
         );
         const data = await res.json();
         if (!res.ok)
@@ -118,10 +134,13 @@ export default function App() {
 
         // console.log(data.results);
         setMovies(data.results);
+        setError("");
         // data.results.map((movie) => setMovies((movies) => [...movies, movie]));
       } catch (err) {
-        console.log(err.message);
-        setError(err.message);
+        if (err.message !== "AbortError") {
+          console.log(err.message);
+          setError(err.message);
+        }
       } finally {
         setisLoading(false);
       }
@@ -131,7 +150,12 @@ export default function App() {
       setError("");
       return;
     }
+
+    handleClosedMovie();
     fetchMovies();
+    return function () {
+      controller.abort();
+    };
   }, [query]);
   // useEffect(() => {
   //   fetch(
@@ -218,6 +242,25 @@ function Logo() {
 }
 // -------------------------- Search component
 function Search({ onsetQuery, query }) {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    function callBack(e) {
+      if (document.activeElement === inputRef.current) {
+        return;
+      }
+      if (e.code === "Enter") {
+        inputRef.current.focus();
+        onsetQuery(""); // reset the search results to show all mov
+      }
+    }
+    inputRef.current.focus();
+
+    document.addEventListener("keydown", callBack);
+    return () => {
+      document.addEventListener("keydown", callBack);
+    };
+  }, []);
   return (
     <input
       className="search"
@@ -225,6 +268,7 @@ function Search({ onsetQuery, query }) {
       placeholder="Search movies..."
       value={query}
       onChange={(e) => onsetQuery(e.target.value)}
+      ref={inputRef}
     />
   );
 }
@@ -338,7 +382,7 @@ function MovieDetails({
   const watcheduserRating = watched.find(
     (movie) => movie.id === selectedId
   )?.userRating;
-  console.log(watcheduserRating);
+  // console.log(watcheduserRating);
 
   function handleAdd() {
     const newMovie = {
@@ -353,6 +397,28 @@ function MovieDetails({
     onAddWatchedMovie(newMovie);
     onClosedMovie();
   }
+
+  useEffect(() => {
+    function callBack(e) {
+      if (e.code === "Escape") {
+        onClosedMovie();
+        // console.log("Closing");
+      }
+    }
+    document.addEventListener("keydown", callBack);
+    return () => {
+      document.removeEventListener("keydown", callBack);
+    };
+  }, [onClosedMovie]);
+
+  useEffect(() => {
+    if (!title) return;
+    document.title = `Movie | ${title}`;
+    return () => {
+      document.title = "usePopcorn";
+      // console.log(`clean up effect for movie ${title})`);
+    };
+  }, [title]);
 
   useEffect(() => {
     async function getMovieDetails() {
